@@ -17,6 +17,7 @@ sessions/WA-*/*
 .env
 .env.local
 *.log
+*.zip
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

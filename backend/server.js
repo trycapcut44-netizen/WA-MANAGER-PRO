@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 const apiRoutes = require('./routes/api');
 const sessionManager = require('./baileys/sessionManager');
@@ -31,6 +32,18 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads
 
 // API routes
 app.use('/api', apiRoutes);
+
+// Serve frontend production build (cPanel / Subdomain Deployment)
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    }
+  });
+}
+
 
 // Socket.io connection handling
 io.on('connection', (socket) => {

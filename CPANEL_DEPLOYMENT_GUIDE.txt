@@ -1,0 +1,49 @@
+========================================================================
+ WA MANAGER PRO - cPanel Subdomain Deployment Step-by-Step Guide
+========================================================================
+
+Follow these simple steps to host WA MANAGER PRO on your cPanel subdomain:
+
+STEP 1: Upload the ZIP File
+------------------------------------------------------------------------
+1. Log in to your cPanel dashboard.
+2. Open "File Manager".
+3. Navigate to your subdomain directory:
+   (Usually: /home/username/subdomain.yourdomain.com OR public_html/subdomain)
+4. Upload "WA-MANAGER-PRO-cpanel-ready.zip".
+5. Right-click the zip file and click "Extract".
+6. Ensure files are directly in the subdomain folder (app.js, backend, package.json, etc.).
+
+
+STEP 2: Setup Node.js App in cPanel
+------------------------------------------------------------------------
+1. Go back to cPanel home and search for "Setup Node.js App".
+2. Click "Create Application".
+3. Fill in the following details:
+   - Node.js version: Select Node 18, 20, or 22 (Recommended: 20 or 22).
+   - Application mode: Production
+   - Application root: Path to your subdomain folder (e.g. subdomain.yourdomain.com)
+   - Application URL: Select your subdomain (e.g. wa.yourdomain.com)
+   - Application startup file: app.js
+4. Click "Create".
+
+
+STEP 3: Install Dependencies
+------------------------------------------------------------------------
+1. Once created, in the "Setup Node.js App" page, look for:
+   "NPM Packages" or "Run NPM Install" button.
+2. Click "Run NPM Install" (this installs express, baileys, socket.io, etc.).
+   
+   OR via cPanel Terminal / SSH:
+   cd to your subdomain directory and run:
+   npm install --omit=dev
+
+
+STEP 4: Start / Restart the App
+------------------------------------------------------------------------
+1. Click the "Restart" button in "Setup Node.js App".
+2. Open your subdomain in the browser (e.g. https://wa.yourdomain.com).
+3. The WA MANAGER PRO WhatsApp Multi-Account Management Tool is now live!
+4. All 10 QR codes, persistent sessions, and auto-replies are ready.
+
+========================================================================
