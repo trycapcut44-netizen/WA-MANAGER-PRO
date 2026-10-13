@@ -1,0 +1,36 @@
+{
+  "WA-1": {
+    "enabled": false,
+    "triggerType": "all",
+    "businessHours": {
+      "start": "09:00",
+      "end": "22:00",
+      "timezone": "UTC"
+    },
+    "keywords": ["price", "catalog", "help", "info"],
+    "cooldownMinutes": 15,
+    "text": "Hello! Thank you for contacting WA-1. Our team is available from 9 AM to 10 PM. We will get back to you shortly!",
+    "media": []
+  },
+  "WA-2": {
+    "enabled": false,
+    "triggerType": "hours",
+    "businessHours": {
+      "start": "09:00",
+      "end": "20:00",
+      "timezone": "UTC"
+    },
+    "keywords": [],
+    "cooldownMinutes": 30,
+    "text": "Thanks for messaging us! We are currently outside of business hours (9 AM - 8 PM). We will reply first thing tomorrow morning.",
+    "media": []
+  },
+  "WA-3": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Thanks for contacting WA-3! We have received your inquiry.", "media": [] },
+  "WA-4": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-4!", "media": [] },
+  "WA-5": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-5!", "media": [] },
+  "WA-6": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-6!", "media": [] },
+  "WA-7": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-7!", "media": [] },
+  "WA-8": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-8!", "media": [] },
+  "WA-9": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-9!", "media": [] },
+  "WA-10": { "enabled": false, "triggerType": "all", "businessHours": { "start": "09:00", "end": "21:00" }, "keywords": [], "cooldownMinutes": 15, "text": "Hello from WA-10!", "media": [] }
+}

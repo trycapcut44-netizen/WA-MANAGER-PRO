@@ -1,0 +1,57 @@
+[
+  {
+    "id": "qr-cars",
+    "name": "/cars",
+    "title": "Available Luxury Cars Catalog",
+    "text": "Hello! Here are our currently available cars with full specs and pricing. Let us know if you would like to book a test drive!",
+    "media": [
+      {
+        "id": "m-car-1",
+        "type": "image",
+        "url": "/uploads/quick-replies/car1.jpg",
+        "name": "Mercedes Benz E-Class 2024.jpg",
+        "mimetype": "image/jpeg"
+      },
+      {
+        "id": "m-car-2",
+        "type": "image",
+        "url": "/uploads/quick-replies/car2.jpg",
+        "name": "BMW M4 Competition.jpg",
+        "mimetype": "image/jpeg"
+      }
+    ],
+    "createdAt": 1718000000000
+  },
+  {
+    "id": "qr-welcome",
+    "name": "/welcome",
+    "title": "Welcome & Business Introduction",
+    "text": "Welcome to WA MANAGER PRO Support! 🚀 How can we assist you today? Please reply with your inquiry or choose from our catalog.",
+    "media": [],
+    "createdAt": 1718000000000
+  },
+  {
+    "id": "qr-pricing",
+    "name": "/pricing",
+    "title": "Pricing & Packages",
+    "text": "Here is our official pricing breakdown:\n\n• Starter: $49/mo (Up to 3 WA Numbers)\n• Pro: $99/mo (Up to 10 WA Numbers)\n• Enterprise: Custom\n\nAll plans include unlimited quick replies & automated triggers.",
+    "media": [],
+    "createdAt": 1718000000000
+  },
+  {
+    "id": "qr-1791921553026",
+    "name": "/j",
+    "title": "/j",
+    "text": "",
+    "media": [
+      {
+        "id": "m-1791921542181",
+        "type": "voice",
+        "url": "/uploads/voice/1791921542145-204574046.webm",
+        "name": "Recorded Voice Note (12:59 AM)",
+        "mimetype": "audio/webm"
+      }
+    ],
+    "createdAt": 1791921553026
+  }
+]

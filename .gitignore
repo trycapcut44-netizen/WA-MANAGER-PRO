@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Production builds
+frontend/dist/
+dist/
+
+# Sensitive WhatsApp Sessions & Keys (Baileys auth)
+sessions/*
+!sessions/.gitkeep
+!sessions/WA-*
+sessions/WA-*/*
+!sessions/WA-*/.gitkeep
+
+# Environment variables & Logs
+.env
+.env.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
