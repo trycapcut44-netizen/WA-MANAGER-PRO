@@ -24,8 +24,13 @@ const itemsToCopy = [
   'server.js',
   'package.json',
   'package-lock.json',
+  'ecosystem.config.js',
+  'Dockerfile',
+  'docker-compose.yml',
+  '.env.example',
   'README.md',
   'CPANEL_DEPLOYMENT_GUIDE.txt',
+  'NODEJS_DEPLOYMENT_GUIDE.md',
   '.gitignore'
 ];
 

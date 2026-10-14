@@ -4,11 +4,13 @@
   "description": "Mobile-First WhatsApp Multi-Account Management Tool",
   "main": "backend/server.js",
   "scripts": {
+    "start": "node backend/server.js",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "postinstall": "npm --prefix frontend install && npm --prefix frontend run build",
     "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"blue,green\" \"npm run server\" \"npm run client\"",
     "server": "node backend/server.js",
     "client": "npm --prefix frontend run dev",
-    "seed": "node seed.js",
-    "build": "npm --prefix frontend run build"
+    "seed": "node seed.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.16",

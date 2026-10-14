@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  wa-manager-pro:
+    build: .
+    container_name: wa_manager_pro
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+    volumes:
+      - ./sessions:/app/sessions
+      - ./public/uploads:/app/public/uploads
