@@ -91,7 +91,20 @@ export default function App() {
       );
       if (update.status === 'connected') {
         fetchContacts(selectedNumberIdRef.current, activeTabRef.current);
+      } else if (update.sessionId === selectedNumberIdRef.current && (update.status === 'disconnected' || update.status === 'qr_ready')) {
+        fetchContacts(selectedNumberIdRef.current, activeTabRef.current);
+        setCurrentChat(null);
+        setMessages([]);
       }
+    });
+
+    socket.on('session_cleared', ({ sessionId }) => {
+      if (sessionId === selectedNumberIdRef.current) {
+        setContacts([]);
+        setCurrentChat(null);
+        setMessages([]);
+      }
+      fetchStatus();
     });
 
     socket.on('stats_update', (statsList) => {
@@ -391,6 +404,11 @@ export default function App() {
     try {
       const res = await fetch(`/api/sessions/${id}/logout`, { method: 'POST' });
       const data = await res.json();
+      if (selectedNumberId === id) {
+        setContacts([]);
+        setCurrentChat(null);
+        setMessages([]);
+      }
       fetchStatus();
       return data;
     } catch (err) {

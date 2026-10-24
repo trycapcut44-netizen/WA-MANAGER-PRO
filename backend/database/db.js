@@ -164,6 +164,21 @@ function deleteContactAndChats(waNumberId, customerJid) {
   return true;
 }
 
+function clearSessionData(waNumberId) {
+  // 1. Remove all contacts belonging to this waNumberId
+  const contacts = readJSON(CONTACTS_FILE, []);
+  const filteredContacts = contacts.filter(c => c.wa_number_id !== waNumberId);
+  writeJSON(CONTACTS_FILE, filteredContacts);
+
+  // 2. Remove all chats belonging to this waNumberId
+  const chats = readJSON(CHATS_FILE, []);
+  const filteredChats = chats.filter(m => m.wa_number_id !== waNumberId);
+  writeJSON(CHATS_FILE, filteredChats);
+
+  console.log(`[Database] Cleared all contacts and chats for session ${waNumberId}`);
+  return true;
+}
+
 
 // --- CHATS / MESSAGES ---
 function getMessages(waNumberId, customerJid) {
@@ -326,6 +341,7 @@ module.exports = {
   markChatAsRead,
   toggleArchiveChat,
   deleteContactAndChats,
+  clearSessionData,
   getMessages,
   saveMessage,
   getQuickReplies,

@@ -70,6 +70,21 @@ router.post('/sessions/:id/connect', async (req, res) => {
 });
 
 router.post('/sessions/:id/logout', async (req, res) => {
+
+
+router.post('/sessions/:id/clear', (req, res) => {
+  try {
+    const { id } = req.params;
+    db.clearSessionData(id);
+    if (sessionManager.io) {
+      sessionManager.io.emit('session_cleared', { sessionId: id });
+      sessionManager.io.emit('stats_update', db.getAllNumbersStats());
+    }
+    res.json({ success: true, message: `All chats and contacts cleared for ${id}` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
   try {
     const { id } = req.params;
     const result = await sessionManager.logout(id);
@@ -95,6 +110,19 @@ router.get('/contacts', (req, res) => {
   try {
     const waNumberId = req.query.wa_number_id || 'WA-1';
     const filter = req.query.filter || 'all'; // 'all' | 'unread' | 'archive'
+    // If session has no credentials and is not connected, it is unlinked
+    const isLinked = sessionManager.hasCredentials(waNumberId) || sessionManager.sessions.get(waNumberId)?.status === 'connected';
+    if (!isLinked) {
+      db.clearSessionData(waNumberId);
+      return res.json({
+        success: true,
+        waNumberId,
+        filter,
+        stats: { contactCount: 0, unreadCount: 0, archiveCount: 0 },
+        contacts: []
+      });
+    }
+
     const contacts = db.getContacts(waNumberId, filter);
     const stats = db.getStatsForNumber(waNumberId);
 
@@ -118,6 +146,11 @@ router.get('/messages', (req, res) => {
 
     if (!waNumberId || !customerJid) {
       return res.status(400).json({ success: false, error: 'wa_number_id and customer_jid are required' });
+    }
+
+    const isLinked = sessionManager.hasCredentials(waNumberId) || sessionManager.sessions.get(waNumberId)?.status === 'connected';
+    if (!isLinked) {
+      return res.json({ success: true, messages: [] });
     }
 
     const messages = db.getMessages(waNumberId, customerJid);

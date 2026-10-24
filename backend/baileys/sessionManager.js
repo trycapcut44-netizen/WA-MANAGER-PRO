@@ -70,6 +70,11 @@ class SessionManager {
     });
   }
 
+  hasCredentials(sessionId) {
+    const credsPath = path.join(SESSIONS_DIR, sessionId, 'creds.json');
+    return fs.existsSync(credsPath);
+  }
+
   async initAllSessions() {
     const list = db.getSessionsMeta();
     for (const item of list) {
@@ -175,9 +180,12 @@ class SessionManager {
               });
             }, delay);
           } else {
-            console.log(`[Baileys] Logged out from ${sessionId}. Clearing credentials.`);
+            console.log(`[Baileys] Logged out from ${sessionId}. Clearing credentials and data.`);
             this.sessions.delete(sessionId);
             this.clearSessionFiles(sessionId);
+
+            // Wipe database chats and contacts for unlinked session
+            db.clearSessionData(sessionId);
 
             db.updateSessionMeta(sessionId, {
               status: 'disconnected',
@@ -191,6 +199,11 @@ class SessionManager {
               pushName: null,
               qr: null
             });
+
+            if (this.io) {
+              this.io.emit('session_cleared', { sessionId });
+              this.io.emit('stats_update', db.getAllNumbersStats());
+            }
           }
         } else if (connection === 'open') {
           console.log(`[Baileys] Session ${sessionId} successfully connected!`);
@@ -332,6 +345,9 @@ class SessionManager {
       this.sessions.delete(sessionId);
       this.clearSessionFiles(sessionId);
 
+      // Wipe database chats and contacts for unlinked session
+      db.clearSessionData(sessionId);
+
       db.updateSessionMeta(sessionId, {
         status: 'disconnected',
         phone: null,
@@ -345,6 +361,11 @@ class SessionManager {
         pushName: null,
         qr: null
       });
+
+      if (this.io) {
+        this.io.emit('session_cleared', { sessionId });
+        this.io.emit('stats_update', db.getAllNumbersStats());
+      }
 
       return { success: true, message: `Session ${sessionId} logged out successfully` };
     } catch (err) {
