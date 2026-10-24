@@ -40,7 +40,7 @@ function getInitials(name = '') {
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   ArrowLeft,
   MoreVertical,
@@ -83,6 +83,54 @@ export default function ChatWindow({
   const [audioSpeed, setAudioSpeed] = useState(1);
 
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const prevMessagesLengthRef = useRef(0);
+  const isInitialLoadRef = useRef(true);
+
+  // Instant scroll to bottom without any animation
+  const scrollToBottomInstant = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    } else if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    }
+  };
+
+  // Pre-paint scroll to bottom when opening chat or when messages load
+  useLayoutEffect(() => {
+    scrollToBottomInstant();
+  }, [messages]);
+
+  // Keep pinned at bottom upon initial load / contact switch
+  useEffect(() => {
+    if (isInitialLoadRef.current) {
+      if (messages.length > 0) {
+        scrollToBottomInstant();
+        const frame = requestAnimationFrame(() => {
+          scrollToBottomInstant();
+        });
+        isInitialLoadRef.current = false;
+        prevMessagesLengthRef.current = messages.length;
+        return () => cancelAnimationFrame(frame);
+      }
+      return;
+    }
+
+    // When new message arrives during ongoing chat:
+    if (messages.length > prevMessagesLengthRef.current) {
+      const lastMsg = messages[messages.length - 1];
+      const container = messagesContainerRef.current;
+      const isNearBottom = container
+        ? container.scrollHeight - container.scrollTop - container.clientHeight < 250
+        : true;
+
+      // Smooth scroll if sent by me or if user was already at the bottom
+      if (lastMsg?.fromMe || isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages]);
   const handleRenameContact = async () => {
     const currentName = contact.name && !contact.name.includes('@') && !/^\d{14,}$/.test(contact.name) ? contact.name : '';
     const newName = window.prompt('Enter customer or contact name:', currentName);
@@ -112,10 +160,7 @@ export default function ChatWindow({
   const fileInputRef = useRef(null);
   const audioElementsRef = useRef({});
 
-  // Auto-scroll to latest message
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+
 
   // Handle typing '/' for quick replies
   const handleInputChange = (e) => {
@@ -265,7 +310,7 @@ export default function ChatWindow({
       </div>
 
       {/* 2. Messages Bubble History (WhatsApp doodle theme) */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2.5 wa-chat-bg">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-2.5 wa-chat-bg">
         {/* Date Stamp */}
         <div className="flex justify-center my-2">
           <span className="px-3 py-1 rounded-lg bg-wa-header text-wa-muted text-[11px] font-medium shadow-sm border border-wa-border/50">

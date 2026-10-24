@@ -527,7 +527,12 @@ export default function App() {
             contacts={contacts}
             activeTab={activeTab}
             selectedChatJid={currentChat?.jid}
-            onSelectChat={(contact) => setCurrentChat(contact)}
+            onSelectChat={(contact) => {
+              if (currentChat?.jid !== contact.jid) {
+                setMessages([]);
+              }
+              setCurrentChat(contact);
+            }}
             onToggleArchive={handleToggleArchive}
             onDeleteChat={handleDeleteChat}
             onStartNewChat={handleStartNewChat}
@@ -554,6 +559,7 @@ export default function App() {
         {currentChat ? (
           /* ACTIVE CHAT WINDOW VIEW */
           <ChatWindow
+            key={`${selectedNumberId}_${currentChat.jid}`}
             contact={currentChat}
             waNumberId={selectedNumberId}
             messages={messages}
