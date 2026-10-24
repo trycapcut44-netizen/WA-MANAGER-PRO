@@ -8,20 +8,20 @@ export default {
     extend: {
       colors: {
         wa: {
-          dark: '#0B141A',
-          panel: '#111B21',
-          header: '#1F2C34',
-          subtle: '#182229',
-          border: '#222D34',
-          input: '#2A3942',
-          green: '#25D366',
-          teal: '#00A884',
-          'bubble-in': '#202C33',
-          'bubble-out': '#005C4B',
-          'bubble-out-dark': '#025143',
-          text: '#E9EDEF',
-          muted: '#8696A0',
-          dim: '#667781',
+          dark: '#FFFFFF',             // White clean background
+          panel: '#FFFFFF',            // White sidebar panel
+          header: '#F0F2F5',           // WhatsApp Web light gray header
+          subtle: '#F5F6F6',           // Light hover gray
+          border: '#E9EDEF',           // Subtle border gray
+          input: '#F0F2F5',            // Input background
+          green: '#25D366',            // WhatsApp brand green
+          teal: '#00A884',             // WhatsApp brand teal
+          'bubble-in': '#FFFFFF',      // Incoming message bubble (pure white)
+          'bubble-out': '#D9FDD3',     // Outgoing message bubble (official light green)
+          'bubble-out-dark': '#C6F7BE',
+          text: '#111B21',             // Crisp dark charcoal text
+          muted: '#667781',            // Secondary gray text
+          dim: '#8696A0',              // Tertiary gray
           danger: '#EA0038'
         }
       },

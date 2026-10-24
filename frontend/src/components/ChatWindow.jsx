@@ -1,3 +1,45 @@
+function formatPhoneNumber(str = '') {
+  if (!str) return '';
+  const clean = str.replace(/@.*$/, '').replace(/[^\d+]/g, '');
+  if (clean.length === 12 && clean.startsWith('92')) {
+    return `+92 ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}`;
+  }
+  if (clean.length === 11 && clean.startsWith('03')) {
+    return `+92 ${clean.slice(1, 4)} ${clean.slice(4, 7)} ${clean.slice(7)}`;
+  }
+  if (clean.length === 11 && clean.startsWith('1')) {
+    return `+1 (${clean.slice(1, 4)}) ${clean.slice(4, 7)}-${clean.slice(7)}`;
+  }
+  if (clean.length >= 10 && clean.length <= 13) {
+    return clean.startsWith('+') ? clean : `+${clean}`;
+  }
+  if (clean.length > 13) {
+    return `ID: ${clean.slice(0, 4)}...${clean.slice(-4)}`;
+  }
+  return clean ? `+${clean}` : '';
+}
+
+function formatDisplayName(contact) {
+  if (!contact) return 'WhatsApp Chat';
+  if (contact.name && contact.name !== contact.jid && !contact.name.includes('@') && !/^\d{14,}$/.test(contact.name)) {
+    return contact.name;
+  }
+  const raw = (contact.phone || contact.jid || '').replace(/@.*$/, '');
+  if (/^\d{10,13}$/.test(raw)) {
+    return formatPhoneNumber(raw);
+  }
+  if (contact.is_group || contact.jid?.endsWith('@g.us')) {
+    return contact.name || 'WhatsApp Group';
+  }
+  return contact.name || 'WhatsApp Customer';
+}
+
+function getInitials(name = '') {
+  if (!name) return 'WA';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
@@ -41,6 +83,32 @@ export default function ChatWindow({
   const [audioSpeed, setAudioSpeed] = useState(1);
 
   const messagesEndRef = useRef(null);
+  const handleRenameContact = async () => {
+    const currentName = contact.name && !contact.name.includes('@') && !/^\d{14,}$/.test(contact.name) ? contact.name : '';
+    const newName = window.prompt('Enter customer or contact name:', currentName);
+    if (newName === null) return;
+    const newPhone = window.prompt('Enter phone number (e.g. +92 300 1234567):', contact.phone || '');
+    try {
+      await fetch('/api/contacts/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wa_number_id: waNumberId,
+          customer_jid: contact.jid,
+          name: newName.trim() || undefined,
+          phone: newPhone !== null ? newPhone.trim() : undefined
+        })
+      });
+      if (newName.trim()) contact.name = newName.trim();
+      if (newPhone) contact.phone = newPhone.trim();
+      // force re-render by updating text
+      setInputText(prev => prev + ' ');
+      setTimeout(() => setInputText(prev => prev.trim()), 50);
+    } catch (err) {
+      console.error('Rename error:', err);
+    }
+  };
+
   const fileInputRef = useRef(null);
   const audioElementsRef = useRef({});
 
@@ -146,7 +214,7 @@ export default function ChatWindow({
         <div className="flex items-center space-x-2 min-w-0">
           <button
             onClick={onBack}
-            className="p-1 -ml-1 text-wa-muted hover:text-wa-text rounded-full active:scale-95 transition-all"
+            className="p-1 -ml-1 text-wa-muted hover:text-wa-text rounded-full active:scale-95 transition-all md:hidden"
           >
             <ArrowLeft className="w-5 h-5 text-wa-green" />
           </button>
@@ -190,6 +258,9 @@ export default function ChatWindow({
           <button className="p-1.5 hover:text-wa-text rounded-full hover:bg-wa-subtle transition-colors">
             <MoreVertical className="w-4 h-4" />
           </button>
+          <button onClick={onBack} title="Close Chat" className="hidden md:flex p-1.5 hover:text-wa-text rounded-full hover:bg-wa-subtle transition-colors text-wa-muted">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -215,7 +286,7 @@ export default function ChatWindow({
               className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group`}
             >
               <div
-                className={`max-w-[82%] rounded-2xl px-3 py-2 text-xs relative shadow-md transition-all ${
+                className={`max-w-[85%] md:max-w-[70%] lg:max-w-[62%] rounded-2xl px-3 py-2 text-xs relative shadow-md transition-all ${
                   isMe
                     ? 'bg-wa-bubble-out text-white rounded-br-xs'
                     : 'bg-wa-bubble-in text-wa-text rounded-bl-xs'
@@ -300,14 +371,14 @@ export default function ChatWindow({
                 )}
 
                 {/* Timestamp & Delivery Status */}
-                <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-white/60">
+                <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-[#667781]">
                   <span>{time}</span>
                   {isMe && (
                     <span>
                       {msg.status === 'read' ? (
-                        <CheckCheck className="w-3.5 h-3.5 text-cyan-300" />
+                        <CheckCheck className="w-3.5 h-3.5 text-[#53BDEB]" />
                       ) : msg.status === 'delivered' ? (
-                        <CheckCheck className="w-3.5 h-3.5 text-white/80" />
+                        <CheckCheck className="w-3.5 h-3.5 text-[#8696A0]" />
                       ) : (
                         <Check className="w-3.5 h-3.5 text-white/80" />
                       )}

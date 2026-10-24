@@ -39,9 +39,6 @@ function writeJSON(filePath, data) {
 }
 
 // --- STATS LOGIC ---
-// contactCount = SELECT COUNT(DISTINCT customer_jid) FROM chats WHERE wa_number_id = 'WA-1' AND is_archived = false
-// unreadCount = SELECT COUNT(DISTINCT customer_jid) WHERE wa_number_id = 'WA-1' AND has_unread = true
-// archiveCount = SELECT COUNT(DISTINCT customer_jid) WHERE wa_number_id = 'WA-1' AND is_archived = true
 function getStatsForNumber(waNumberId) {
   const contacts = readJSON(CONTACTS_FILE, []);
   const matching = contacts.filter(c => c.wa_number_id === waNumberId);
@@ -178,8 +175,16 @@ function getMessages(waNumberId, customerJid) {
 
 function saveMessage(msg) {
   const chats = readJSON(CHATS_FILE, []);
+  const msgId = msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Deduplicate
+  const existingIdx = chats.findIndex(m => m.id === msgId && m.wa_number_id === msg.wa_number_id);
+  if (existingIdx !== -1) {
+    return chats[existingIdx];
+  }
+
   const newMsg = {
-    id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: msgId,
     wa_number_id: msg.wa_number_id,
     customer_jid: msg.customer_jid,
     fromMe: Boolean(msg.fromMe),
@@ -209,7 +214,7 @@ function saveMessage(msg) {
 
   const existingContact = getContact(msg.wa_number_id, msg.customer_jid);
   const currentUnread = existingContact ? (existingContact.unreadCount || 0) : 0;
-  const newUnread = msg.fromMe ? 0 : (currentUnread + 1);
+  const newUnread = msg.fromMe ? currentUnread : (currentUnread + 1);
 
   upsertContact(msg.wa_number_id, msg.customer_jid, {
     lastMessage: lastPreview,

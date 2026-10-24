@@ -1,7 +1,14 @@
 import React from 'react';
-import { ShieldCheck, Settings, Bell, QrCode } from 'lucide-react';
+import { ShieldCheck, Settings, Bell, QrCode, Zap, Bot } from 'lucide-react';
 
-export default function Header({ onlineCount, totalNumbers, onOpenQR, onOpenSettings }) {
+export default function Header({
+  onlineCount,
+  totalNumbers,
+  onOpenQR,
+  onOpenSettings,
+  onOpenQuickReplies,
+  onOpenAutoReplies
+}) {
   return (
     <header className="sticky top-0 z-40 bg-wa-header border-b border-wa-border/80 px-4 py-3 flex items-center justify-between shadow-md select-none">
       {/* Left: App Logo & Title */}
@@ -23,7 +30,29 @@ export default function Header({ onlineCount, totalNumbers, onOpenQR, onOpenSett
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center space-x-1.5">
+      <div className="flex items-center space-x-1">
+        {/* Quick Replies Shortcut (Desktop view) */}
+        {onOpenQuickReplies && (
+          <button
+            onClick={onOpenQuickReplies}
+            title="Quick Replies (/templates)"
+            className="p-2 rounded-full hover:bg-wa-subtle active:scale-95 text-wa-muted hover:text-amber-400 transition-all hidden md:flex"
+          >
+            <Zap className="w-5 h-5 text-amber-400" />
+          </button>
+        )}
+
+        {/* Auto Reply Bot Shortcut (Desktop view) */}
+        {onOpenAutoReplies && (
+          <button
+            onClick={onOpenAutoReplies}
+            title="Auto Reply Rules"
+            className="p-2 rounded-full hover:bg-wa-subtle active:scale-95 text-wa-muted hover:text-wa-green transition-all hidden md:flex"
+          >
+            <Bot className="w-5 h-5" />
+          </button>
+        )}
+
         {/* QR Manager button */}
         <button
           onClick={onOpenQR}

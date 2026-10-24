@@ -13,6 +13,11 @@ sessions/*
 sessions/WA-*/*
 !sessions/WA-*/.gitkeep
 
+# Sensitive User Data & Live Database Messages/Contacts
+database/chats.json
+database/contacts.json
+database/sessions_meta.json
+
 # Environment variables & Logs
 .env
 .env.local

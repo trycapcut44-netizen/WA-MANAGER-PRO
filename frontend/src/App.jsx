@@ -11,6 +11,7 @@ import AutoReplyModal from './components/AutoReplyModal';
 import QRManagerModal from './components/QRManagerModal';
 import SettingsModal from './components/SettingsModal';
 import BottomNav from './components/BottomNav';
+import { ShieldCheck, QrCode, Zap, Bot, Lock } from 'lucide-react';
 
 export default function App() {
   // Numbers & status
@@ -45,14 +46,35 @@ export default function App() {
 
   const socketRef = useRef(null);
 
+  // Up-to-date references for event handlers without stale closures
+  const selectedNumberIdRef = useRef(selectedNumberId);
+  selectedNumberIdRef.current = selectedNumberId;
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const currentChatRef = useRef(currentChat);
+  currentChatRef.current = currentChat;
+
   // Initialize Socket.io and fetch initial data
   useEffect(() => {
     fetchStatus();
     fetchQuickReplies();
     fetchAutoReplies();
 
-    const socket = io();
+    // Direct connection to port 5000 in dev avoids Vite dev proxy timeouts
+    const socketUrl = window.location.port === '3000'
+      ? `http://${window.location.hostname}:5000`
+      : undefined;
+
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000
+    });
     socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('[Socket] Connected live to server:', socket.id);
+    });
 
     socket.on('session_list', (list) => {
       setNumbers((prev) =>
@@ -67,6 +89,9 @@ export default function App() {
       setNumbers((prev) =>
         prev.map((item) => (item.id === update.sessionId ? { ...item, ...update } : item))
       );
+      if (update.status === 'connected') {
+        fetchContacts(selectedNumberIdRef.current, activeTabRef.current);
+      }
     });
 
     socket.on('stats_update', (statsList) => {
@@ -83,24 +108,43 @@ export default function App() {
             : item;
         })
       );
+      // Auto refresh chat list whenever stats update
+      fetchContacts(selectedNumberIdRef.current, activeTabRef.current);
     });
 
     socket.on('new_message', ({ sessionId, message }) => {
-      // If the incoming message belongs to the current open chat
-      setCurrentChat((active) => {
-        if (active && active.wa_number_id === sessionId && active.jid === message.customer_jid) {
-          setMessages((prevMsgs) => [...prevMsgs, message]);
-        }
-        return active;
-      });
+      console.log('[Socket] Incoming new message:', message);
 
-      // Refresh contact list to show updated preview & unread count
-      fetchContacts(selectedNumberId, activeTab);
+      const active = currentChatRef.current;
+      if (
+        active &&
+        active.wa_number_id === sessionId &&
+        (active.jid === message.customer_jid || active.jid === message.remoteJid)
+      ) {
+        setMessages((prevMsgs) => {
+          if (prevMsgs.some((m) => m.id === message.id)) return prevMsgs;
+          return [...prevMsgs, message];
+        });
+      }
+
+      // Refresh contact list to show updated last message preview and timestamp
+      fetchContacts(selectedNumberIdRef.current, activeTabRef.current);
     });
 
     return () => {
       socket.disconnect();
     };
+  }, []);
+
+  // 3-second live sync polling to ensure 100% reliable updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchContacts(selectedNumberIdRef.current, activeTabRef.current);
+      if (currentChatRef.current) {
+        fetchMessages(currentChatRef.current.wa_number_id, currentChatRef.current.jid);
+      }
+    }, 3000);
+    return () => clearInterval(timer);
   }, []);
 
   // Fetch contacts whenever selectedNumberId or activeTab changes
@@ -425,80 +469,164 @@ export default function App() {
   const unreadTotal = numbers.reduce((acc, n) => acc + (n.unreadCount || 0), 0);
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-wa-dark text-wa-text font-sans">
-      {currentChat ? (
-        /* ACTIVE CHAT WINDOW VIEW */
-        <ChatWindow
-          contact={currentChat}
-          waNumberId={selectedNumberId}
-          messages={messages}
-          quickReplies={quickReplies}
-          onBack={() => setCurrentChat(null)}
-          onSendMessage={handleSendMessage}
-          onSendMedia={handleSendMedia}
-          onSendQuickReply={handleSendQuickReply}
-          onDeleteChat={handleDeleteChat}
+    <div className="flex h-screen w-screen overflow-hidden bg-wa-dark text-wa-text font-sans">
+      {/* 1. LEFT SIDEBAR PANEL (WhatsApp Web layout: 380px - 440px on desktop, full width on mobile) */}
+      <div
+        className={`flex-col h-full bg-wa-panel border-r border-wa-border/80 ${
+          currentChat
+            ? 'hidden md:flex md:w-[380px] lg:w-[420px] xl:w-[460px] flex-shrink-0'
+            : 'flex w-full md:w-[380px] lg:w-[420px] xl:w-[460px] flex-shrink-0'
+        }`}
+      >
+        {/* Top Header with App Logo, QR, Notifications, Quick Actions & Settings */}
+        <Header
+          onlineCount={onlineCount}
+          totalNumbers={10}
+          onOpenQR={() => setIsQRModalOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenQuickReplies={() => setIsQuickReplyModalOpen(true)}
+          onOpenAutoReplies={() => setIsAutoReplyModalOpen(true)}
         />
-      ) : (
-        /* MAIN DASHBOARD & CHAT FEED VIEW */
-        <>
-          {/* Header Top: App Name "WA MANAGER PRO" with a shield icon, Settings and Notification icons */}
-          <Header
-            onlineCount={onlineCount}
-            totalNumbers={10}
-            onOpenQR={() => setIsQRModalOpen(true)}
-            onOpenSettings={() => setIsSettingsModalOpen(true)}
-          />
 
-          {/* Status Card below header: "10 WhatsApp numbers connected - All connected and online - Now synced" */}
-          <StatusCard
-            onlineCount={onlineCount}
-            totalCount={10}
-            onOpenQR={() => setIsQRModalOpen(true)}
-            onRefresh={fetchStatus}
-          />
+        {/* Status Card (Online accounts indicator) */}
+        <StatusCard
+          onlineCount={onlineCount}
+          totalCount={10}
+          onOpenQR={() => setIsQRModalOpen(true)}
+          onRefresh={fetchStatus}
+        />
 
-          {/* Connected Numbers List: Show 10 rows like "WA-1 • 58 Contacts • Online" with green dot */}
-          <NumberSelector
-            numbers={numbers}
-            selectedId={selectedNumberId}
-            onSelectNumber={(id) => setSelectedNumberId(id)}
-            onOpenQRForNumber={(id) => {
-              setSelectedNumberId(id);
-              setIsQRModalOpen(true);
-            }}
-          />
+        {/* Connected Numbers Switcher */}
+        <NumberSelector
+          numbers={numbers}
+          selectedId={selectedNumberId}
+          onSelectNumber={(id) => {
+            setSelectedNumberId(id);
+            setCurrentChat(null);
+          }}
+          onOpenQRForNumber={(id) => {
+            setSelectedNumberId(id);
+            setIsQRModalOpen(true);
+          }}
+        />
 
-          {/* Filter Tabs: Directly below status card, 3 tabs: All (58) | Unread (7) | Archive (10) */}
-          <FilterTabs
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            counts={{
-              contactCount: selectedNumber.contactCount || 0,
-              unreadCount: selectedNumber.unreadCount || 0,
-              archiveCount: selectedNumber.archiveCount || 0
-            }}
-          />
+        {/* Filter Tabs (All / Unread / Archive) */}
+        <FilterTabs
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          counts={{
+            contactCount: selectedNumber.contactCount || 0,
+            unreadCount: selectedNumber.unreadCount || 0,
+            archiveCount: selectedNumber.archiveCount || 0
+          }}
+        />
 
-          {/* Recent Chats Section: List of customer chats for selected number */}
+        {/* Scrollable Chat List */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <ChatList
             contacts={contacts}
             activeTab={activeTab}
+            selectedChatJid={currentChat?.jid}
             onSelectChat={(contact) => setCurrentChat(contact)}
             onToggleArchive={handleToggleArchive}
             onDeleteChat={handleDeleteChat}
             onStartNewChat={handleStartNewChat}
           />
+        </div>
 
-          {/* Bottom Thumb Navigation Bar */}
+        {/* Bottom Thumb Navigation Bar (Visible on mobile only) */}
+        <div className="md:hidden">
           <BottomNav
             activeNav={activeBottomNav}
             onSelectNav={handleSelectNav}
             unreadTotal={unreadTotal}
             onlineCount={onlineCount}
           />
-        </>
-      )}
+        </div>
+      </div>
+
+      {/* 2. RIGHT MAIN PANEL (Active Chat Window OR WhatsApp Web Desktop Placeholder) */}
+      <div
+        className={`flex-1 flex-col h-full bg-wa-dark relative ${
+          currentChat ? 'flex w-full' : 'hidden md:flex'
+        }`}
+      >
+        {currentChat ? (
+          /* ACTIVE CHAT WINDOW VIEW */
+          <ChatWindow
+            contact={currentChat}
+            waNumberId={selectedNumberId}
+            messages={messages}
+            quickReplies={quickReplies}
+            onBack={() => setCurrentChat(null)}
+            onSendMessage={handleSendMessage}
+            onSendMedia={handleSendMedia}
+            onSendQuickReply={handleSendQuickReply}
+            onDeleteChat={(jid) => {
+              handleDeleteChat(jid);
+              setCurrentChat(null);
+            }}
+          />
+        ) : (
+          /* WHATSAPP WEB DESKTOP EMPTY STATE */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center wa-chat-bg select-none relative border-b-8 border-wa-teal">
+            <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-wa-teal mb-5 shadow-md border border-wa-border">
+              <ShieldCheck className="w-10 h-10 text-wa-green" />
+            </div>
+
+            <h2 className="text-2xl font-semibold text-wa-text tracking-wide mb-2">
+              WA MANAGER PRO for Web
+            </h2>
+
+            <p className="text-xs text-wa-muted max-w-sm leading-relaxed mb-6">
+              Send and receive messages across all 10 WhatsApp numbers without keeping your phone online. Multi-number real-time socket syncing active.
+            </p>
+
+            {/* Active Account Pill */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-wa-border text-xs text-wa-muted mb-6 shadow-sm">
+              <span className={`w-2 h-2 rounded-full ${selectedNumber.status === 'connected' ? 'bg-wa-green pulse-green' : 'bg-wa-muted'}`}></span>
+              <span className="text-wa-text font-bold">{selectedNumber.id}</span>
+              <span>•</span>
+              <span className={selectedNumber.status === 'connected' ? 'text-wa-green font-medium' : 'text-wa-muted'}>
+                {selectedNumber.status === 'connected' ? 'Connected' : 'Disconnected'}
+              </span>
+              <span>•</span>
+              <span>{selectedNumber.contactCount || 0} Contacts</span>
+            </div>
+
+            {/* Quick Action Shortcuts */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setIsQRModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-wa-teal hover:bg-wa-teal/90 text-white text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>Scan / 10 QRs</span>
+              </button>
+              <button
+                onClick={() => setIsQuickReplyModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-white hover:bg-wa-subtle border border-wa-border text-wa-text text-xs font-semibold shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <Zap className="w-4 h-4 text-amber-400" />
+                <span>Quick Replies</span>
+              </button>
+              <button
+                onClick={() => setIsAutoReplyModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-wa-header hover:bg-wa-subtle border border-wa-border text-wa-text text-xs font-semibold shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <Bot className="w-4 h-4 text-wa-green" />
+                <span>Auto Reply</span>
+              </button>
+            </div>
+
+            {/* Encryption & Security Note */}
+            <div className="absolute bottom-6 flex items-center space-x-1.5 text-[11px] text-wa-muted/70">
+              <Lock className="w-3.5 h-3.5" />
+              <span>End-to-end encrypted • Multi-session synchronized</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* MODALS */}
       <QRManagerModal

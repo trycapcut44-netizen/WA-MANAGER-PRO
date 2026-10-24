@@ -5,9 +5,7 @@ const {
   default: makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  makeInMemoryStore,
-  proto
+  fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const db = require('../database/db');
@@ -21,7 +19,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 class SessionManager {
   constructor() {
-    this.sessions = new Map(); // id -> { sock, qr, status, store, retryCount }
+    this.sessions = new Map(); // id -> { sock, qr, status, retryCount }
     this.io = null;
     this.autoReplyCooldowns = new Map(); // key `${waId}_${jid}` -> timestamp
   }
@@ -51,12 +49,23 @@ class SessionManager {
     const all = db.getSessionsMeta();
     return all.map(s => {
       const active = this.sessions.get(s.id);
+      const credsPath = path.join(SESSIONS_DIR, s.id, 'creds.json');
+      const hasCreds = fs.existsSync(credsPath);
+
+      // Determine true status
+      let realStatus = 'disconnected';
+      if (active?.status) {
+        realStatus = active.status;
+      } else if (hasCreds) {
+        realStatus = 'disconnected';
+      }
+
       return {
         ...s,
-        status: active?.status || s.status || 'disconnected',
+        status: realStatus,
         qr: active?.qr || null,
-        phone: active?.phone || s.phone || null,
-        pushName: active?.pushName || s.pushName || null
+        phone: active?.phone || (hasCreds ? s.phone : null),
+        pushName: active?.pushName || (hasCreds ? s.pushName : null)
       };
     });
   }
@@ -65,7 +74,6 @@ class SessionManager {
     const list = db.getSessionsMeta();
     for (const item of list) {
       const sessionPath = path.join(SESSIONS_DIR, item.id);
-      // If folder contains existing creds.json, auto-connect to restore online state!
       const credsPath = path.join(sessionPath, 'creds.json');
       if (fs.existsSync(credsPath)) {
         console.log(`[Baileys] Found existing credentials for ${item.id}. Restoring connection...`);
@@ -100,7 +108,7 @@ class SessionManager {
         printQRInTerminal: false,
         auth: state,
         browser: ['WA MANAGER PRO', 'Chrome', '124.0.0.0'],
-        syncFullHistory: false,
+        syncFullHistory: true, // Enables full history sync from phone
         generateHighQualityLinkPreview: true,
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
@@ -210,16 +218,92 @@ class SessionManager {
             pushName: pushName,
             qr: null
           });
+
+          setTimeout(() => {
+            this.enrichContacts(sessionId).catch(e => console.warn('Enrichment notice:', e.message));
+          }, 1500);
         }
       });
 
-      // Incoming messages handler
-      sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
+      // 1. Messaging History Sync (Existing contacts, chats, messages from WhatsApp phone)
+      sock.ev.on('messaging-history.set', async ({ chats, contacts, messages }) => {
+        console.log(`[Baileys] History synced for ${sessionId}: ${chats?.length || 0} chats, ${contacts?.length || 0} contacts, ${messages?.length || 0} messages`);
 
+        if (contacts && contacts.length > 0) {
+          for (const c of contacts) {
+            if (c.id && !c.id.includes('@broadcast')) {
+              db.upsertContact(sessionId, c.id, {
+                name: c.name || c.notify || c.verifiedName || c.id.replace(/@.*$/, ''),
+                phone: c.id.replace(/@.*$/, '')
+              });
+            }
+          }
+        }
+
+        if (chats && chats.length > 0) {
+          for (const ch of chats) {
+            if (ch.id && !ch.id.includes('@broadcast')) {
+              db.upsertContact(sessionId, ch.id, {
+                name: ch.name || ch.id.replace(/@.*$/, ''),
+                phone: ch.id.replace(/@.*$/, ''),
+                unreadCount: ch.unreadCount || 0,
+                is_archived: Boolean(ch.archived)
+              });
+            }
+          }
+        }
+
+        if (messages && messages.length > 0) {
+          for (const msg of messages) {
+            try {
+              await this.handleIncomingMessage(sessionId, sock, msg, false);
+            } catch (err) {
+              // ignore single message parsing issues
+            }
+          }
+        }
+
+        if (this.io) {
+          this.io.emit('stats_update', db.getAllNumbersStats());
+          this.io.emit('session_update', { sessionId, status: 'connected' });
+        }
+      });
+
+      // 2. Real-time contacts update
+      sock.ev.on('contacts.upsert', (contacts) => {
+        for (const c of contacts) {
+          if (c.id && !c.id.includes('@broadcast')) {
+            db.upsertContact(sessionId, c.id, {
+              name: c.name || c.notify || c.verifiedName || c.id.replace(/@.*$/, ''),
+              phone: c.id.replace(/@.*$/, '')
+            });
+          }
+        }
+      });
+
+      // 3. Real-time chats update
+      sock.ev.on('chats.upsert', (newChats) => {
+        for (const ch of newChats) {
+          if (ch.id && !ch.id.includes('@broadcast')) {
+            db.upsertContact(sessionId, ch.id, {
+              name: ch.name || ch.id.replace(/@.*$/, ''),
+              phone: ch.id.replace(/@.*$/, ''),
+              unreadCount: ch.unreadCount || 0,
+              is_archived: Boolean(ch.archived)
+            });
+          }
+        }
+        if (this.io) {
+          this.io.emit('stats_update', db.getAllNumbersStats());
+        }
+      });
+
+      // 4. Messages handler (live incoming & appended messages)
+      sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        const isLive = type === 'notify';
         for (const msg of messages) {
           try {
-            await this.handleIncomingMessage(sessionId, sock, msg);
+            await this.handleIncomingMessage(sessionId, sock, msg, isLive);
           } catch (mErr) {
             console.error(`[Baileys] Error handling message on ${sessionId}:`, mErr);
           }
@@ -281,7 +365,7 @@ class SessionManager {
     }
   }
 
-  async handleIncomingMessage(sessionId, sock, rawMsg) {
+  async handleIncomingMessage(sessionId, sock, rawMsg, allowAutoReply = true) {
     if (!rawMsg.message) return;
     const key = rawMsg.key;
     const remoteJid = key.remoteJid;
@@ -292,7 +376,14 @@ class SessionManager {
     }
 
     const fromMe = key.fromMe;
-    const messageContent = rawMsg.message;
+
+    // Unwrap ephemeral or viewOnce wrappers
+    let messageContent = rawMsg.message;
+    if (messageContent.ephemeralMessage?.message) messageContent = messageContent.ephemeralMessage.message;
+    if (messageContent.viewOnceMessage?.message) messageContent = messageContent.viewOnceMessage.message;
+    if (messageContent.viewOnceMessageV2?.message) messageContent = messageContent.viewOnceMessageV2.message;
+    if (messageContent.documentWithCaptionMessage?.message) messageContent = messageContent.documentWithCaptionMessage.message;
+
     const pushName = rawMsg.pushName || remoteJid.replace(/@.*$/, '');
 
     // Extract text & media details
@@ -301,33 +392,36 @@ class SessionManager {
     let mediaUrl = null;
     let audioUrl = null;
     let videoUrl = null;
+    let fileName = null;
 
     if (messageContent.conversation) {
       text = messageContent.conversation;
     } else if (messageContent.extendedTextMessage) {
-      text = messageContent.extendedTextMessage.text;
+      text = messageContent.extendedTextMessage.text || '';
     } else if (messageContent.imageMessage) {
       msgType = 'image';
       text = messageContent.imageMessage.caption || '';
-      mediaUrl = '/uploads/sample-voice.mp3'; // Fallback preview
     } else if (messageContent.videoMessage) {
       msgType = 'video';
       text = messageContent.videoMessage.caption || '';
     } else if (messageContent.audioMessage) {
       msgType = 'audio';
-      audioUrl = '/uploads/sample-voice.mp3';
     } else if (messageContent.documentMessage) {
       msgType = 'document';
-      text = messageContent.documentMessage.fileName || 'Document';
+      fileName = messageContent.documentMessage.fileName || 'Document';
+      text = fileName;
+    } else if (messageContent.protocolMessage) {
+      return; // ignore protocol messages
     }
 
     const savedMsg = db.saveMessage({
-      id: key.id || `msg-${Date.now()}`,
+      id: key.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       wa_number_id: sessionId,
       customer_jid: remoteJid,
       fromMe: Boolean(fromMe),
       type: msgType,
       text: text,
+      fileName,
       mediaUrl,
       audioUrl,
       videoUrl,
@@ -336,7 +430,7 @@ class SessionManager {
     });
 
     // Update customer name in contacts if available
-    if (!fromMe && pushName) {
+    if (pushName) {
       db.upsertContact(sessionId, remoteJid, {
         name: pushName,
         phone: remoteJid.replace(/@.*$/, '')
@@ -346,7 +440,7 @@ class SessionManager {
     this.emitNewMessage(sessionId, savedMsg);
 
     // Process Auto-Reply only for incoming messages from customers
-    if (!fromMe && !remoteJid.endsWith('@g.us')) {
+    if (allowAutoReply && !fromMe && !remoteJid.endsWith('@g.us')) {
       await this.processAutoReply(sessionId, sock, remoteJid, text);
     }
   }
@@ -370,7 +464,6 @@ class SessionManager {
     if (config.triggerType === 'all') {
       shouldTrigger = true;
     } else if (config.triggerType === 'hours') {
-      // Outside Business Hours
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -398,15 +491,13 @@ class SessionManager {
 
     // Send auto reply items (Text + Rich Media)
     try {
-      // 1. Send Media items if any
       if (Array.isArray(config.media) && config.media.length > 0) {
         for (const item of config.media) {
           await this.sendMediaItem(sessionId, customerJid, item);
-          await new Promise(r => setTimeout(r, 600)); // small delay
+          await new Promise(r => setTimeout(r, 600));
         }
       }
 
-      // 2. Send Text if provided
       if (config.text && config.text.trim()) {
         await this.sendTextMessage(sessionId, customerJid, config.text);
       }
@@ -415,11 +506,66 @@ class SessionManager {
     }
   }
 
+  async enrichContacts(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.sock || session.status !== 'connected') return;
+    const sock = session.sock;
+
+    const contacts = db.getContacts(sessionId, 'all');
+    console.log(`[Baileys] Starting enrichment for ${contacts.length} contacts on ${sessionId}...`);
+
+    let anyUpdated = false;
+
+    for (const contact of contacts) {
+      let isUpdated = false;
+      const updates = {};
+
+      // 1. Group Subject Resolution
+      if (contact.jid.endsWith('@g.us')) {
+        updates.is_group = true;
+        try {
+          const meta = await sock.groupMetadata(contact.jid);
+          if (meta?.subject && meta.subject !== contact.name) {
+            updates.name = meta.subject;
+            updates.phone = `${meta.participants?.length || 0} participants`;
+            isUpdated = true;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 2. Profile Picture (DP) Resolution
+      if (!contact.avatarUrl) {
+        try {
+          const dpUrl = await sock.profilePictureUrl(contact.jid, 'image');
+          if (dpUrl) {
+            updates.avatarUrl = dpUrl;
+            isUpdated = true;
+          }
+        } catch (e) {
+          // no dp or private
+        }
+      }
+
+      if (isUpdated) {
+        db.upsertContact(sessionId, contact.jid, updates);
+        anyUpdated = true;
+      }
+
+      await new Promise(r => setTimeout(r, 80));
+    }
+
+    if (anyUpdated && this.io) {
+      console.log(`[Baileys] Enrichment complete with updates for ${sessionId}`);
+      this.io.emit('stats_update', db.getAllNumbersStats());
+    }
+  }
+
   // --- SENDING METHODS ---
   async sendTextMessage(sessionId, customerJid, text) {
     const session = this.sessions.get(sessionId);
     if (!session || !session.sock || session.status !== 'connected') {
-      // Save locally in database so offline testing/demo works seamlessly!
       const saved = db.saveMessage({
         wa_number_id: sessionId,
         customer_jid: customerJid,
@@ -515,7 +661,6 @@ class SessionManager {
 
     const sentItems = [];
 
-    // Send all media items sequentially
     if (Array.isArray(template.media)) {
       for (const mediaItem of template.media) {
         const sent = await this.sendMediaItem(sessionId, customerJid, mediaItem);
@@ -524,7 +669,6 @@ class SessionManager {
       }
     }
 
-    // Send text if present
     if (template.text && template.text.trim()) {
       const sent = await this.sendTextMessage(sessionId, customerJid, template.text);
       sentItems.push(sent);
